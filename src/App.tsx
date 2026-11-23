@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Anchor, MapPin, Award, Search, QrCode, FileSpreadsheet, Check, Download, Upload, RefreshCw } from 'lucide-react';
+import { Anchor, MapPin, Award, Search, QrCode, FileSpreadsheet, Check, Download, Upload, RefreshCw, UserCheck, Users, MessageSquare } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
 
@@ -15,6 +15,10 @@ interface Delegate {
   unit: string;
   hallLocation: string; // Format: "Hàng A, ghế 01"
   banquetLocation: string;
+  rsvp?: 'yes' | 'no' | 'pending';
+  familyCount?: number;
+  familyNames?: string;
+  note?: string;
 }
 
 const DEFAULT_DELEGATES: Delegate[] = [
@@ -25,6 +29,10 @@ const DEFAULT_DELEGATES: Delegate[] = [
     unit: 'Bộ Quốc phòng',
     hallLocation: 'Hàng A, ghế 01',
     banquetLocation: 'Bàn VIP 01 - Ghế số 01',
+    rsvp: 'yes',
+    familyCount: 0,
+    familyNames: '',
+    note: '',
   },
   {
     id: '2',
@@ -33,6 +41,10 @@ const DEFAULT_DELEGATES: Delegate[] = [
     unit: 'Bộ Tư lệnh Quân chủng',
     hallLocation: 'Hàng A, ghế 02',
     banquetLocation: 'Bàn VIP 01 - Ghế số 02',
+    rsvp: 'yes',
+    familyCount: 1,
+    familyNames: 'Phu nhân đi cùng',
+    note: 'Đã xác nhận',
   },
   {
     id: '3',
@@ -41,6 +53,10 @@ const DEFAULT_DELEGATES: Delegate[] = [
     unit: 'Bộ Tư lệnh Quân chủng',
     hallLocation: 'Hàng A, ghế 03',
     banquetLocation: 'Bàn VIP 01 - Ghế số 03',
+    rsvp: 'pending',
+    familyCount: 0,
+    familyNames: '',
+    note: '',
   },
   {
     id: '4',
@@ -49,6 +65,10 @@ const DEFAULT_DELEGATES: Delegate[] = [
     unit: 'Lữ đoàn 162, Vùng 4',
     hallLocation: 'Hàng C, ghế 01',
     banquetLocation: 'Bàn 03 - Ghế số 01',
+    rsvp: 'yes',
+    familyCount: 0,
+    familyNames: '',
+    note: '',
   },
   {
     id: '5',
@@ -57,12 +77,16 @@ const DEFAULT_DELEGATES: Delegate[] = [
     unit: 'Lữ đoàn 162, Vùng 4',
     hallLocation: 'Hàng C, ghế 02',
     banquetLocation: 'Bàn 03 - Ghế số 02',
+    rsvp: 'yes',
+    familyCount: 0,
+    familyNames: '',
+    note: '',
   },
 ];
 
 export default function App() {
   const [delegates, setDelegates] = useState<Delegate[]>(() => {
-    const saved = localStorage.getItem('brigade162_delegates_v3');
+    const saved = localStorage.getItem('brigade162_delegates_v4');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { return DEFAULT_DELEGATES; }
     }
@@ -80,10 +104,27 @@ export default function App() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importText, setImportText] = useState('');
 
+  // RSVP Form local state for selected delegate
+  const currentDelegate = delegates.find(d => d.id === selectedId) || delegates[0];
+  
+  const [rsvpStatus, setRsvpStatus] = useState<'yes' | 'no' | 'pending'>(currentDelegate?.rsvp || 'pending');
+  const [familyCount, setFamilyCount] = useState<number>(currentDelegate?.familyCount || 0);
+  const [familyNames, setFamilyNames] = useState<string>(currentDelegate?.familyNames || '');
+  const [delegateNote, setDelegateNote] = useState<string>(currentDelegate?.note || '');
+
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    localStorage.setItem('brigade162_delegates_v3', JSON.stringify(delegates));
+    if (currentDelegate) {
+      setRsvpStatus(currentDelegate.rsvp || 'pending');
+      setFamilyCount(currentDelegate.familyCount || 0);
+      setFamilyNames(currentDelegate.familyNames || '');
+      setDelegateNote(currentDelegate.note || '');
+    }
+  }, [selectedId, delegates]);
+
+  useEffect(() => {
+    localStorage.setItem('brigade162_delegates_v4', JSON.stringify(delegates));
   }, [delegates]);
 
   useEffect(() => {
@@ -104,8 +145,6 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const currentDelegate = delegates.find(d => d.id === selectedId) || delegates[0];
-
   const filteredDelegates = delegates.filter(
     d =>
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -125,11 +164,29 @@ export default function App() {
     if (window.confirm('Khôi phục danh sách mẫu mặc định?')) {
       setDelegates(DEFAULT_DELEGATES);
       setSelectedId(DEFAULT_DELEGATES[0].id);
-      localStorage.setItem('brigade162_delegates_v3', JSON.stringify(DEFAULT_DELEGATES));
+      localStorage.setItem('brigade162_delegates_v4', JSON.stringify(DEFAULT_DELEGATES));
     }
   };
 
-  // Download Excel Template with format: "Hàng A, ghế 01"
+  // Save RSVP update for current delegate
+  const handleSaveRsvp = () => {
+    const updated = delegates.map(d => {
+      if (d.id === currentDelegate.id) {
+        return {
+          ...d,
+          rsvp: rsvpStatus,
+          familyCount: rsvpStatus === 'yes' ? familyCount : 0,
+          familyNames: rsvpStatus === 'yes' ? familyNames : '',
+          note: delegateNote,
+        };
+      }
+      return d;
+    });
+    setDelegates(updated);
+    alert('Đã lưu xác nhận tham gia thành công!');
+  };
+
+  // Download Excel Template with RSVP columns
   const handleDownloadTemplate = () => {
     const templateData = [
       {
@@ -137,28 +194,49 @@ export default function App() {
         "Chức vụ": "Bộ trưởng Bộ Quốc phòng",
         "Đơn vị": "Bộ Quốc phòng",
         "Vị trí hội trường": "Hàng A, ghế 01",
-        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 01"
+        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 01",
+        "Xác nhận tham gia (Có/Không)": "Có",
+        "Số người thân": 0,
+        "Ghi chú người thân / Khác": "",
+        "Ghi chú": "Đã xác nhận"
       },
       {
         "Họ và tên": "Đô đốc Trần Đăng Minh",
         "Chức vụ": "Tư lệnh Quân chủng Hải quân",
         "Đơn vị": "Bộ Tư lệnh Quân chủng",
         "Vị trí hội trường": "Hàng A, ghế 02",
-        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 02"
-      },
-      {
-        "Họ và tên": "Đại tá Nguyễn Văn Dũng",
-        "Chức vụ": "Lữ đoàn trưởng",
-        "Đơn vị": "Lữ đoàn 162",
-        "Vị trí hội trường": "Hàng C, ghế 01",
-        "Vị trí bàn tiệc": "Bàn 03 - Ghế số 01"
+        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 02",
+        "Xác nhận tham gia (Có/Không)": "Có",
+        "Số người thân": 1,
+        "Ghi chú người thân / Khác": "Phu nhân đi cùng",
+        "Ghi chú": ""
       }
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(templateData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachDaiBieu");
-    XLSX.writeFile(workbook, "Mau_Danh_Sach_Cho_Ngoi_Lu_Doan_162.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "XacNhanThamGia");
+    XLSX.writeFile(workbook, "Mau_Xac_Nhan_Tham_Gia_Lu_Doan_162.xlsx");
+  };
+
+  // Export current list to Excel including RSVP
+  const handleExportExcel = () => {
+    const exportData = delegates.map(d => ({
+      "Họ và tên": d.name,
+      "Chức vụ": d.title,
+      "Đơn vị": d.unit,
+      "Vị trí hội trường": d.hallLocation,
+      "Vị trí bàn tiệc": d.banquetLocation,
+      "Xác nhận tham gia": d.rsvp === 'yes' ? 'Có' : d.rsvp === 'no' ? 'Không' : 'Chưa xác nhận',
+      "Số người thân đi cùng": d.familyCount || 0,
+      "Tên / Ghi chú người thân": d.familyNames || '',
+      "Ghi chú": d.note || '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachXacNhan");
+    XLSX.writeFile(workbook, `Danh_Sach_Xac_Nhan_Tham_Gia_L162_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   // Handle Excel File Upload
@@ -176,14 +254,24 @@ export default function App() {
         const data = XLSX.utils.sheet_to_json<any>(ws);
 
         if (data.length > 0) {
-          const parsedDelegates: Delegate[] = data.map((row, idx) => ({
-            id: `excel-${Date.now()}-${idx}`,
-            name: row['Họ và tên'] || row['Ho va ten'] || row['Name'] || `Đại biểu ${idx + 1}`,
-            title: row['Chức vụ'] || row['Chuc vu'] || row['Title'] || 'Đại biểu',
-            unit: row['Đơn vị'] || row['Don vi'] || row['Unit'] || 'Lữ đoàn 162',
-            hallLocation: row['Vị trí hội trường'] || row['Vi tri hoi truong'] || row['Hall'] || 'Hàng B, ghế 01',
-            banquetLocation: row['Vị trí bàn tiệc'] || row['Vi tri ban tiec'] || row['Banquet'] || 'Bàn 01 - Ghế số 01',
-          }));
+          const parsedDelegates: Delegate[] = data.map((row, idx) => {
+            const rsvpRaw = String(row['Xác nhận tham gia (Có/Không)'] || row['Xác nhận tham gia'] || row['Xac nhan tham gia'] || 'Chưa xác nhận').toLowerCase();
+            const isYes = rsvpRaw.includes('có') || rsvpRaw.includes('yes') || rsvpRaw.includes('tham gia');
+            const isNo = rsvpRaw.includes('không') || rsvpRaw.includes('ko') || rsvpRaw.includes('no');
+
+            return {
+              id: `excel-${Date.now()}-${idx}`,
+              name: row['Họ và tên'] || row['Ho va ten'] || row['Name'] || `Đại biểu ${idx + 1}`,
+              title: row['Chức vụ'] || row['Chuc vu'] || row['Title'] || 'Đại biểu',
+              unit: row['Đơn vị'] || row['Don vi'] || row['Unit'] || 'Lữ đoàn 162',
+              hallLocation: row['Vị trí hội trường'] || row['Vi tri hoi truong'] || row['Hall'] || 'Hàng B, ghế 01',
+              banquetLocation: row['Vị trí bàn tiệc'] || row['Vi tri ban tiec'] || row['Banquet'] || 'Bàn 01 - Ghế số 01',
+              rsvp: isYes ? 'yes' : isNo ? 'no' : 'pending',
+              familyCount: Number(row['Số người thân'] || row['Số người thân đi cùng'] || 0),
+              familyNames: String(row['Ghi chú người thân / Khác'] || row['Tên / Ghi chú người thân'] || ''),
+              note: String(row['Ghi chú'] || ''),
+            };
+          });
 
           setDelegates(parsedDelegates);
           setSelectedId(parsedDelegates[0].id);
@@ -197,41 +285,6 @@ export default function App() {
       }
     };
     reader.readAsBinaryString(file);
-  };
-
-  // Handle Paste Import
-  const handlePasteImport = () => {
-    if (!importText.trim()) return;
-    try {
-      const lines = importText.trim().split('\n');
-      const newDelegates: Delegate[] = [];
-
-      lines.forEach((line, idx) => {
-        const parts = line.split('\t').map(p => p.trim());
-        if (parts.length >= 2) {
-          newDelegates.push({
-            id: `paste-${Date.now()}-${idx}`,
-            name: parts[0] || `Đại biểu ${idx + 1}`,
-            title: parts[1] || 'Đại biểu khách mời',
-            unit: parts[2] || 'Lữ đoàn 162',
-            hallLocation: parts[3] || 'Hàng B, ghế 01',
-            banquetLocation: parts[4] || 'Bàn 02 - Ghế số 01',
-          });
-        }
-      });
-
-      if (newDelegates.length > 0) {
-        setDelegates(newDelegates);
-        setSelectedId(newDelegates[0].id);
-        setShowImportModal(false);
-        setImportText('');
-        alert(`Đã nhập thành công ${newDelegates.length} đại biểu!`);
-      } else {
-        alert('Không đọc được dữ liệu dán.');
-      }
-    } catch (err) {
-      alert('Lỗi định dạng dữ liệu.');
-    }
   };
 
   return (
@@ -248,25 +301,26 @@ export default function App() {
                 LỮ ĐOÀN 162 - VÙNG 4 HẢI QUÂN
               </div>
               <h1 className="text-lg md:text-xl font-extrabold text-white">
-                TRA CỨU CHỖ NGỒI ĐẠI BIỂU
+                TRA CỨU CHỖ NGỒI & XÁC NHẬN THAM GIA
               </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleResetToDefault}
-              title="Khôi phục danh sách mẫu"
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all"
+              onClick={handleExportExcel}
+              title="Xuất danh sách ra Excel"
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow transition-all"
             >
-              <RefreshCw className="w-4 h-4" />
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Xuất Excel</span>
             </button>
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Tải & Nhập Excel</span>
+              <span>Nhập Excel</span>
             </button>
           </div>
         </div>
@@ -308,7 +362,14 @@ export default function App() {
                       <div className="text-sm font-extrabold text-white">{d.name}</div>
                       <div className="text-xs text-amber-400">{d.title} — <span className="text-slate-400">{d.unit}</span></div>
                     </div>
-                    {d.id === selectedId && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                        d.rsvp === 'yes' ? 'bg-emerald-500/20 text-emerald-400' : d.rsvp === 'no' ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        {d.rsvp === 'yes' ? 'Tham gia' : d.rsvp === 'no' ? 'Không tham gia' : 'Chưa xác nhận'}
+                      </span>
+                      {d.id === selectedId && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
+                    </div>
                   </div>
                 ))
               ) : (
@@ -338,7 +399,7 @@ export default function App() {
             {/* Two Required Positions: Hall & Banquet */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Hall Position (Format: Hàng A, ghế 01) */}
+              {/* Hall Position */}
               <div className="bg-slate-950 border-2 border-blue-500/40 rounded-2xl p-5 shadow-lg space-y-3">
                 <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider">
                   <MapPin className="w-5 h-5" /> 1. Vị Trí Trong Hội Trường
@@ -370,6 +431,98 @@ export default function App() {
                 </p>
               </div>
 
+            </div>
+
+            {/* RSVP Section (Xác nhận tham gia & Người thân) */}
+            <div className="bg-slate-950 border-2 border-amber-500/30 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
+                <UserCheck className="w-5 h-5" /> Xác Nhận Tham Gia Lễ Đón Nhận
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setRsvpStatus('yes')}
+                  className={`flex items-center justify-center gap-2.5 p-3.5 rounded-2xl border-2 font-bold text-sm transition-all ${
+                    rsvpStatus === 'yes'
+                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/20'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full border flex items-center justify-center ${rsvpStatus === 'yes' ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'}`}>
+                    {rsvpStatus === 'yes' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  </span>
+                  <span>Có tham gia</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setRsvpStatus('no')}
+                  className={`flex items-center justify-center gap-2.5 p-3.5 rounded-2xl border-2 font-bold text-sm transition-all ${
+                    rsvpStatus === 'no'
+                      ? 'bg-red-600/30 border-red-500 text-red-300 shadow-lg shadow-red-500/20'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full border flex items-center justify-center ${rsvpStatus === 'no' ? 'bg-red-500 border-red-400 text-slate-950' : 'border-slate-600'}`}>
+                    {rsvpStatus === 'no' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  </span>
+                  <span>Không tham gia</span>
+                </button>
+              </div>
+
+              {/* If YES: Family members & Notes */}
+              {rsvpStatus === 'yes' && (
+                <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3 animate-fadeIn">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                    <Users className="w-4 h-4" /> Thông tin người thân đi cùng & ghi chú
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">Số lượng người thân</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={5}
+                        value={familyCount}
+                        onChange={(e) => setFamilyCount(parseInt(e.target.value) || 0)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] text-slate-400 mb-1">Tên / Ghi chú người thân đi cùng</label>
+                      <input
+                        type="text"
+                        placeholder="VD: Phu nhân Nguyễn Thị B"
+                        value={familyNames}
+                        onChange={(e) => setFamilyNames(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* General Note */}
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Ghi chú thêm (nếu có)</label>
+                <input
+                  type="text"
+                  placeholder="VD: Đến muộn 15 phút do công tác..."
+                  value={delegateNote}
+                  onChange={(e) => setDelegateNote(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveRsvp}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold text-xs shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Lưu Xác Nhận Tham Gia</span>
+              </button>
             </div>
 
             {/* QR Code Section */}
@@ -417,10 +570,10 @@ export default function App() {
             {/* Step 1: Download Template */}
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                Bước 1: Tải file mẫu Excel chuẩn (Ví dụ: Hàng A, ghế 01)
+                Bước 1: Tải file mẫu Excel chuẩn (Gồm cột Xác nhận & Người thân)
               </span>
               <p className="text-xs text-slate-300">
-                File mẫu có định dạng vị trí hội trường: <code className="text-amber-300">Hàng A, ghế 01</code>.
+                File mẫu có đầy đủ các cột: Họ tên, Chức vụ, Đơn vị, Vị trí hội trường, Vị trí bàn tiệc, Xác nhận tham gia, Số người thân, Ghi chú.
               </p>
               <button
                 onClick={handleDownloadTemplate}
@@ -449,12 +602,6 @@ export default function App() {
                   className="hidden"
                 />
               </label>
-            </div>
-
-            {/* Import Error / Format helper */}
-            <div className="bg-blue-950/40 p-3.5 rounded-xl border border-blue-900/50 text-xs text-slate-300 space-y-1">
-              <span className="font-bold text-blue-300 block">💡 Lưu ý quan trọng khi nhập Excel:</span>
-              <p>Cột "Vị trí hội trường" trong file Excel của bạn hãy ghi đúng định dạng: <strong className="text-amber-300">Hàng A, ghế 01</strong> (có dấu phẩy).</p>
             </div>
 
           </div>
