@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Anchor, MapPin, Award, Search, QrCode, FileSpreadsheet, Check, Download, Upload, HelpCircle } from 'lucide-react';
+import { Anchor, MapPin, Award, Search, QrCode, FileSpreadsheet, Check, Download, Upload, RefreshCw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import * as XLSX from 'xlsx';
 
@@ -13,7 +13,7 @@ interface Delegate {
   name: string;
   title: string;
   unit: string;
-  hallLocation: string;
+  hallLocation: string; // Format: "Hàng A, ghế 01"
   banquetLocation: string;
 }
 
@@ -23,7 +23,7 @@ const DEFAULT_DELEGATES: Delegate[] = [
     name: 'Đại tướng Phan Văn Giang',
     title: 'Bộ trưởng Bộ Quốc phòng',
     unit: 'Bộ Quốc phòng',
-    hallLocation: 'Khu vực A - Hàng 1 - Ghế A-01',
+    hallLocation: 'Hàng A, ghế 01',
     banquetLocation: 'Bàn VIP 01 - Ghế số 01',
   },
   {
@@ -31,7 +31,7 @@ const DEFAULT_DELEGATES: Delegate[] = [
     name: 'Đô đốc Trần Đăng Minh',
     title: 'Tư lệnh Quân chủng Hải quân',
     unit: 'Bộ Tư lệnh Quân chủng',
-    hallLocation: 'Khu vực A - Hàng 1 - Ghế A-02',
+    hallLocation: 'Hàng A, ghế 02',
     banquetLocation: 'Bàn VIP 01 - Ghế số 02',
   },
   {
@@ -39,7 +39,7 @@ const DEFAULT_DELEGATES: Delegate[] = [
     name: 'Trung tướng Nguyễn Văn Bổng',
     title: 'Chính ủy Quân chủng Hải quân',
     unit: 'Bộ Tư lệnh Quân chủng',
-    hallLocation: 'Khu vực A - Hàng 1 - Ghế A-03',
+    hallLocation: 'Hàng A, ghế 03',
     banquetLocation: 'Bàn VIP 01 - Ghế số 03',
   },
   {
@@ -47,7 +47,7 @@ const DEFAULT_DELEGATES: Delegate[] = [
     name: 'Đại tá Nguyễn Văn Dũng',
     title: 'Lữ đoàn trưởng Lữ đoàn 162',
     unit: 'Lữ đoàn 162, Vùng 4',
-    hallLocation: 'Khu vực C - Hàng 1 - Ghế C-01',
+    hallLocation: 'Hàng C, ghế 01',
     banquetLocation: 'Bàn 03 - Ghế số 01',
   },
   {
@@ -55,14 +55,14 @@ const DEFAULT_DELEGATES: Delegate[] = [
     name: 'Thượng tá Lê Bá Hải',
     title: 'Chính ủy Lữ đoàn 162',
     unit: 'Lữ đoàn 162, Vùng 4',
-    hallLocation: 'Khu vực C - Hàng 1 - Ghế C-02',
+    hallLocation: 'Hàng C, ghế 02',
     banquetLocation: 'Bàn 03 - Ghế số 02',
   },
 ];
 
 export default function App() {
   const [delegates, setDelegates] = useState<Delegate[]>(() => {
-    const saved = localStorage.getItem('brigade162_delegates');
+    const saved = localStorage.getItem('brigade162_delegates_v3');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { return DEFAULT_DELEGATES; }
     }
@@ -83,7 +83,7 @@ export default function App() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    localStorage.setItem('brigade162_delegates', JSON.stringify(delegates));
+    localStorage.setItem('brigade162_delegates_v3', JSON.stringify(delegates));
   }, [delegates]);
 
   useEffect(() => {
@@ -121,22 +121,37 @@ export default function App() {
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
 
-  // Download Excel Template
+  const handleResetToDefault = () => {
+    if (window.confirm('Khôi phục danh sách mẫu mặc định?')) {
+      setDelegates(DEFAULT_DELEGATES);
+      setSelectedId(DEFAULT_DELEGATES[0].id);
+      localStorage.setItem('brigade162_delegates_v3', JSON.stringify(DEFAULT_DELEGATES));
+    }
+  };
+
+  // Download Excel Template with format: "Hàng A, ghế 01"
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        "Họ và tên": "Đại tá Nguyễn Văn A",
-        "Chức vụ": "Phó Lữ đoàn trưởng",
-        "Đơn vị": "Lữ đoàn 162",
-        "Vị trí hội trường": "Khu vực C - Hàng 2 - Ghế C-05",
-        "Vị trí bàn tiệc": "Bàn 04 - Ghế số 01"
+        "Họ và tên": "Đại tướng Phan Văn Giang",
+        "Chức vụ": "Bộ trưởng Bộ Quốc phòng",
+        "Đơn vị": "Bộ Quốc phòng",
+        "Vị trí hội trường": "Hàng A, ghế 01",
+        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 01"
       },
       {
-        "Họ và tên": "Thượng tá Trần Văn B",
-        "Chức vụ": "Tham mưu trưởng",
+        "Họ và tên": "Đô đốc Trần Đăng Minh",
+        "Chức vụ": "Tư lệnh Quân chủng Hải quân",
+        "Đơn vị": "Bộ Tư lệnh Quân chủng",
+        "Vị trí hội trường": "Hàng A, ghế 02",
+        "Vị trí bàn tiệc": "Bàn VIP 01 - Ghế số 02"
+      },
+      {
+        "Họ và tên": "Đại tá Nguyễn Văn Dũng",
+        "Chức vụ": "Lữ đoàn trưởng",
         "Đơn vị": "Lữ đoàn 162",
-        "Vị trí hội trường": "Khu vực C - Hàng 2 - Ghế C-06",
-        "Vị trí bàn tiệc": "Bàn 04 - Ghế số 02"
+        "Vị trí hội trường": "Hàng C, ghế 01",
+        "Vị trí bàn tiệc": "Bàn 03 - Ghế số 01"
       }
     ];
 
@@ -166,7 +181,7 @@ export default function App() {
             name: row['Họ và tên'] || row['Ho va ten'] || row['Name'] || `Đại biểu ${idx + 1}`,
             title: row['Chức vụ'] || row['Chuc vu'] || row['Title'] || 'Đại biểu',
             unit: row['Đơn vị'] || row['Don vi'] || row['Unit'] || 'Lữ đoàn 162',
-            hallLocation: row['Vị trí hội trường'] || row['Vi tri hoi truong'] || row['Hall'] || 'Khu vực B - Hàng 1 - Ghế B-01',
+            hallLocation: row['Vị trí hội trường'] || row['Vi tri hoi truong'] || row['Hall'] || 'Hàng B, ghế 01',
             banquetLocation: row['Vị trí bàn tiệc'] || row['Vi tri ban tiec'] || row['Banquet'] || 'Bàn 01 - Ghế số 01',
           }));
 
@@ -199,7 +214,7 @@ export default function App() {
             name: parts[0] || `Đại biểu ${idx + 1}`,
             title: parts[1] || 'Đại biểu khách mời',
             unit: parts[2] || 'Lữ đoàn 162',
-            hallLocation: parts[3] || 'Khu vực B - Hàng 2 - Ghế B-01',
+            hallLocation: parts[3] || 'Hàng B, ghế 01',
             banquetLocation: parts[4] || 'Bàn 02 - Ghế số 01',
           });
         }
@@ -238,13 +253,22 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Tải & Nhập Excel</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetToDefault}
+              title="Khôi phục danh sách mẫu"
+              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Tải & Nhập Excel</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -314,7 +338,7 @@ export default function App() {
             {/* Two Required Positions: Hall & Banquet */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
-              {/* Hall Position */}
+              {/* Hall Position (Format: Hàng A, ghế 01) */}
               <div className="bg-slate-950 border-2 border-blue-500/40 rounded-2xl p-5 shadow-lg space-y-3">
                 <div className="flex items-center gap-2 text-blue-400 text-xs font-bold uppercase tracking-wider">
                   <MapPin className="w-5 h-5" /> 1. Vị Trí Trong Hội Trường
@@ -393,10 +417,10 @@ export default function App() {
             {/* Step 1: Download Template */}
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                Bước 1: Tải file mẫu Excel chuẩn
+                Bước 1: Tải file mẫu Excel chuẩn (Ví dụ: Hàng A, ghế 01)
               </span>
               <p className="text-xs text-slate-300">
-                Tải file mẫu định dạng chuẩn gồm các cột: <strong className="text-white">Họ và tên, Chức vụ, Đơn vị, Vị trí hội trường, Vị trí bàn tiệc</strong>.
+                File mẫu có định dạng vị trí hội trường: <code className="text-amber-300">Hàng A, ghế 01</code>.
               </p>
               <button
                 onClick={handleDownloadTemplate}
@@ -427,24 +451,10 @@ export default function App() {
               </label>
             </div>
 
-            {/* Alternative: Paste option */}
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Hoặc dán nhanh dữ liệu từ Excel
-              </span>
-              <textarea
-                rows={4}
-                placeholder="Copy các hàng từ Excel và dán vào đây..."
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
-              ></textarea>
-              <button
-                onClick={handlePasteImport}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs"
-              >
-                Xác Nhận Dán Dữ Liệu
-              </button>
+            {/* Import Error / Format helper */}
+            <div className="bg-blue-950/40 p-3.5 rounded-xl border border-blue-900/50 text-xs text-slate-300 space-y-1">
+              <span className="font-bold text-blue-300 block">💡 Lưu ý quan trọng khi nhập Excel:</span>
+              <p>Cột "Vị trí hội trường" trong file Excel của bạn hãy ghi đúng định dạng: <strong className="text-amber-300">Hàng A, ghế 01</strong> (có dấu phẩy).</p>
             </div>
 
           </div>
